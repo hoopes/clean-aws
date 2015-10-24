@@ -11,6 +11,12 @@
                                 :prefix (str env "/take_screenshot")
                                 :marker next-marker}))
 
+(defn move-object [cred bucket key new-key]
+  "Take a key string, and a new-key to move it to"
+  (println (str key " -> " new-key))
+  (s3/copy-object cred bucket key new-key)
+  (s3/delete-object cred bucket key))
+
 (defn move-objects [cred bucket env objects]
   "
   Take a bucket name, and the list of objects, and move to old dir. Note that
@@ -22,9 +28,7 @@
     (doseq [o objects]
       (let [key (:key o)
             new-key (clojure.string/replace key env (str env "/old"))]
-        (println (str key " -> " new-key))
-        (s3/copy-object cred bucket key new-key)
-        (s3/delete-object cred bucket key)))))
+        (move-object cred bucket key new-key)))))
 
 (defn dump-object-names [objects]
   "Take a list of objects, and just print the names of the files"
