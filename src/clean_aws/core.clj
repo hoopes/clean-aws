@@ -7,15 +7,18 @@
   "Get the next set of objects from s3.
    See http://weavejester.github.io/clj-aws-s3/aws.sdk.s3.html#var-list-objects"
   (println (str "Getting objects for " bucket " - Next marker: " next-marker))
-  (s3/list-objects cred bucket {:max-keys 100
-                                :prefix (str env "/take_screenshot")
-                                :marker next-marker}))
+  (let [max-keys 100
+        prefix (str env "/take_screenshot")]
+    (s3/list-objects cred bucket {:max-keys max-keys
+                                  :prefix prefix
+                                  :marker next-marker})))
 
 (defn move-object [cred bucket key new-key]
   "Take a key string, and a new-key to move it to"
   (println (str key " -> " new-key))
-  (s3/copy-object cred bucket key new-key)
-  (s3/delete-object cred bucket key))
+  ;(s3/copy-object cred bucket key new-key)
+  ;(s3/delete-object cred bucket key)
+  )
 
 (defn move-objects [cred bucket env objects]
   "
@@ -49,23 +52,25 @@
     (println "")
     (println (str "Iteration " iteration ", next: " next-marker))
 
-    ; if we hit the end of the line (the list is now truncated), or we hit our
-    ; failsafe level of iterations, bail out. Otherwise, continue to the next loop.
-    (if (or
-          (not (:truncated? object-data))
-          (> iteration 5))
+    ; This is a failsafe to make sure i don't have an infinite loop
+    (if (> iteration 5)
 
-      (println (str "Leaving loop - truncated: " (:truncated? object-data) " Iteration: " iteration))
+      (println (str "Leaving loop - iteration: " iteration))
 
       (do
 
         ;(dump-object-names (:objects object-data))
         (move-objects cred bucket env (:objects object-data))
 
-        ; loop it back again, with new values for the loop args. This is where
-        ; we get the next set of objects (by using the next-marker from the object-data)
-        (let [next-it (inc iteration)
-              next-marker (:next-marker object-data)
-              next-obj (get-objects cred bucket env :next-marker next-marker)]
-          ;(println (str "Found next marker: " next-marker))
-          (recur next-it next-marker next-obj))))))
+        ; if the list is truncated (aka it has more objects in the list), go
+        ; back for more
+        (if (:truncated? object-data)
+
+          ; loop it back again, with new values for the loop args. This is where
+          ; we get the next set of objects (by using the next-marker from the object-data)
+          (let [next-it (inc iteration)
+                next-marker (:next-marker object-data)
+                next-obj (get-objects cred bucket env :next-marker next-marker)]
+            (recur next-it next-marker next-obj))
+
+          (println "End of the line for these objects"))))))
